@@ -1,0 +1,209 @@
+---
+title: "PML- Quantified Self Movement Data Analysis Report"
+output: html_document
+---
+
+
+Introduction
+
+Utilizing Wearable Computing, for example, Microsoft Kinect , Nike FuelBand, and Fitbit are capable of storing an extensive  
+
+information about individual activity. These Wearable gadgets exercises datasets are to be used to investigate "how (well)" 
+
+an activity was performed by the wearer. One thing that individuals frequently do is measure the amount of a specific action 
+
+they do, yet they seldom evaluate how well they do it. In this project, we will extract the information from accelerometers data
+
+of 6 participants activities aged between 20-28 years for Dumbbell Biceps Curl (Class A), throwing the elbows to the front (Class B), 
+
+lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E)
+
+to predict which activities was performmed at a specific point in time.
+
+
+##Data Preprocessing
+
+attached libraries
+
+```{r}
+
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(corrplot)
+
+```
+
+##attached the Data into two data frames
+
+```{r}
+
+Training <- read.csv("L:/_DATA SCIENCE_JHU/08- Practical Machine Learning/PML-Quantified-Self-Project/pml-training.csv")
+Testing  <- read.csv("L:/_DATA SCIENCE_JHU/08- Practical Machine Learning/PML-Quantified-Self-Project//pml-testing.csv")
+dim(Training)
+dim(Testing)
+
+```
+
+The training data set consisted of 19622 observations and 160 variables, the testing data set contains
+20 observations and 160 variables. 
+
+The "classe" variable is used to predict which activities was performmed at a specific point in time.
+
+##Cleaning 
+
+Remove all un-usable variables and missing values
+
+```{r}
+
+sum(complete.cases(Training))
+
+```
+
+###Remove all columns with NA. 
+
+```{r}
+
+Training <- Training[, colSums(is.na(Training)) == 0]
+Testing <- Testing[, colSums(is.na(Testing)) == 0]
+
+```
+
+###Next, we get rid of some columns that do not contribute much to the accelerometer measurements.
+
+```{r}
+
+classe <- Training$classe
+TrainingRemove <- grepl("^X|timestamp|window", names(Training))
+Training <- Training[, !TrainingRemove]
+TrainingCleaned <- Training[, sapply(Training, is.numeric)]
+TrainingCleaned$classe <- classe
+TestingRemove <- grepl("^X|timestamp|window", names(Testing))
+Testing <- Testing[, !TestingRemove]
+TestingCleaned <- Testing[, sapply(Testing, is.numeric)]
+
+```
+
+###The cleaned dataset are consisted of 19622 observation Rows and 53 Columns variable and the testing dataset cosisted of 20 
+###observation rows and 53 variable columns.
+
+###Partition dataset
+
+Partition the cleaned dataset into 2 sets, 70% is set to just for training and the 30% for validation.
+
+
+```{r}
+
+set.seed(22519)
+inTraining <- createDataPartition(TrainingCleaned$classe, p=0.70, list=F)
+TrainingData <- TrainingCleaned[inTraining, ]
+TestingData <- TrainingCleaned[-inTraining, ]
+
+```
+
+##Modeling
+
+We select Random Forest algorithm because it ensemble learning method for classification 
+and regression that construct a number of decision trees at training time and outputting 
+the class that is the mode of the classes output by individual trees. We will use 5-fold
+cross validation when applying the algorithm.
+
+
+```{r}
+
+#Random forest 5-fold cross validation algorithm settings. 
+
+cv <- trainControl(method="cv", 5)
+
+model <- train(classe~., data=TrainingData, method="rf", trControl=cv, ntree=250)
+
+#Random Forest summary output
+
+model
+
+```
+
+##Prediction
+
+Prediction over test subset, using training set fitted model:
+
+```{r}
+
+prediction <- predict(model, TestingData)
+
+```
+
+```{r}
+
+confusionMatrix(TestingData$classe, prediction)
+
+```
+
+```{r}
+
+accuracy <- postResample(prediction, TestingData$classe)
+
+#accuracy output
+accuracy
+
+```
+
+
+###estimated accuracy of the model is 99.42% and the estimated outofsample error is 0.58%.
+
+##Predicting for Test Data Set
+
+
+```{r}
+
+result <- predict(model, TestingCleaned[, -length(names(TestingCleaned))])
+
+#result output
+result
+
+```
+
+###Generate text file with a single capital letter (A, B, C, D, or E) corresponding to prediction for the corresponding problem in the test data set.
+
+```{r}
+
+answers <- result
+pml_write_files <- function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_results/problem_id_",i,".txt")
+    write.table(x[i], file=filename, quote=FALSE,
+                row.names=FALSE, col.names=FALSE)
+  }
+}
+
+#result sent output to problem_results directory
+pml_write_files(answers)
+
+```
+
+
+#Appendix: Visualization Figures
+
+1. Correlation Matrix 
+
+```{r}
+
+corrPlot <- cor(TrainingData[, -length(names(TrainingData))])
+
+corrplot(corrPlot, method="color")
+
+```
+
+
+2. Decision Tree 
+
+```{r}
+
+treeModel <- rpart(classe ~ ., data=TrainingData, method="class")
+
+# fast plot
+prp(treeModel) 
+
+```
